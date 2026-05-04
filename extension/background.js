@@ -145,54 +145,47 @@ async function checkProduct(product) {
     console.log(`   URL: ${product.url}`);
     console.log(`   Item ID: ${product.itemId}`);
 
-    // Find a Lazada tab to inject into
-    let tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/*' });
+    // NEW APPROACH: Navigate to product page and check DOM
+    // This is the ONLY reliable way to avoid anti-bot
 
+    // Find or create a dedicated monitoring tab
+    let tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/products/*' });
+
+    let tab;
     if (tabs.length === 0) {
-      console.log(`   ⚠️  No Lazada tabs open - opening one...`);
-      // Open a hidden Lazada tab
-      const tab = await chrome.tabs.create({ url: 'https://www.lazada.sg/', active: false });
-
-      // Wait for tab to load and content script to inject
-      await new Promise(resolve => {
-        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-          if (tabId === tab.id && info.status === 'complete') {
-            chrome.tabs.onUpdated.removeListener(listener);
-            resolve();
-          }
-        });
-      });
-
-      // Give it extra time for content script
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      tabs = [tab];
+      console.log(`   Creating monitoring tab...`);
+      tab = await chrome.tabs.create({ url: product.url, active: false });
+    } else {
+      // Reuse existing tab
+      tab = tabs[0];
+      console.log(`   Reusing tab ${tab.id}, navigating to product...`);
+      await chrome.tabs.update(tab.id, { url: product.url });
     }
 
-    // Use existing tab
-    const tab = tabs[0];
-    console.log(`   Using tab: ${tab.id}`);
-
-    // Try to send message with retry
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        await chrome.tabs.sendMessage(tab.id, {
-          action: 'checkStock',
-          itemId: product.itemId,
-          url: product.url
-        });
-        console.log(`   ✅ Message sent to tab`);
-        break;
-      } catch (err) {
-        retries--;
-        if (retries > 0) {
-          console.log(`   ⚠️  Retry ${3 - retries}/3... waiting for content script`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } else {
-          throw err;
+    // Wait for page to load
+    await new Promise(resolve => {
+      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+        if (tabId === tab.id && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          console.log(`   ✅ Page loaded`);
+          resolve();
         }
-      }
+      });
+    });
+
+    // Give DOM time to render
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Execute DOM check directly in the page
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: checkStockFromPageDOM
+    });
+
+    if (results && results[0] && results[0].result) {
+      handleStockResult(results[0].result);
+    } else {
+      throw new Error('No result from DOM check');
     }
 
   } catch (error) {
@@ -201,6 +194,43 @@ async function checkProduct(product) {
     product.error = error.message;
     chrome.storage.local.set({watchlist});
   }
+}
+
+// This function runs in the product page context
+function checkStockFromPageDOM() {
+  const urlMatch = window.location.href.match(/-i(\d+)/);
+  const itemId = urlMatch ? urlMatch[1] : null;
+
+  const nameElem = document.querySelector('h1') || document.querySelector('[class*="title"]');
+  const name = nameElem ? nameElem.textContent.trim().substring(0, 100) : 'Unknown';
+
+  const priceElem = document.querySelector('.pdp-price') || document.querySelector('[class*="price"]');
+  const price = priceElem ? priceElem.textContent.trim() : 'N/A';
+
+  // Check stock
+  let inStock = true;
+
+  // Look for "Out of Stock"
+  if (document.body.textContent.toLowerCase().includes('out of stock') ||
+      document.body.textContent.toLowerCase().includes('sold out')) {
+    inStock = false;
+  }
+
+  // Check Add to Cart button
+  const btn = document.querySelector('button[type="submit"]') ||
+             document.querySelector('.add-to-cart-buy-now-btn');
+  if (btn && (btn.disabled || btn.textContent.toLowerCase().includes('out of stock'))) {
+    inStock = false;
+  }
+
+  return {
+    itemId,
+    name,
+    price,
+    inStock,
+    success: true,
+    quantity: inStock ? 1 : 0
+  };
 }
 
 function handleStockResult(result) {
