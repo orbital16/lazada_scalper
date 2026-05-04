@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔥 Lazada Auto-Buy Bot</h1>
+      <div class="status" id="status">Monitoring: <span id="monitoring-status">OFF</span></div>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>
+          <input type="checkbox" id="test-mode">
+          🧪 Test Mode (Don't Actually Buy)
+        </label>
+      </div>
+
+      <div class="control-group">
+        <label>Check Interval:</label>
+        <select id="check-interval">
+          <option value="2000">2 seconds (Safer)</option>
+          <option value="3000" selected>3 seconds (Safe - Recommended)</option>
+          <option value="5000">5 seconds (Very Safe)</option>
+          <option value="10000">10 seconds (Ultra Safe)</option>
+        </select>
+      </div>
+
+      <div class="button-group">
+        <button id="start-btn" class="btn btn-primary">▶️ Start Monitoring</button>
+        <button id="stop-btn" class="btn btn-secondary">⏸️ Stop</button>
+      </div>
+    </div>
+
+    <div class="watchlist">
+      <h2>Watchlist (<span id="product-count">0</span>)</h2>
+      <div id="product-list">
+        <div class="empty-state">
+          <p>No products yet</p>
+          <p class="hint">Open a Lazada product page and click "MONITOR & AUTO-BUY"</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-label">Last Check:</div>
+        <div class="stat-value" id="last-check">Never</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Total Checks:</div>
+        <div class="stat-value" id="total-checks">0</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="warning">
+        ⚠️ Make sure you're logged into Lazada in this browser
+      </div>
+      <div class="info">
+        No CAPTCHA risk - Uses your browser session
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

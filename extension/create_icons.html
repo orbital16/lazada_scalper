@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html><head><title>Icons</title></head><body>
+<canvas id="c16" width="16" height="16"></canvas>
+<canvas id="c48" width="48" height="48"></canvas>
+<canvas id="c128" width="128" height="128"></canvas>
+<script>
+['c16','c48','c128'].forEach(id => {
+  const c = document.getElementById(id);
+  const ctx = c.getContext('2d');
+  const s = parseInt(id.slice(1));
+  ctx.fillStyle = '#667eea';
+  ctx.fillRect(0,0,s,s);
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${s*0.5}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🔥', s/2, s/2);
+  c.toBlob(b => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `icon${s}.png`;
+    a.click();
+  });
+});
+</script>
+</body></html>

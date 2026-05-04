@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Lazada Auto-Buy Bot",
+  "version": "1.0.0",
+  "description": "Auto-buy Lazada products when in stock - NO CAPTCHA",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "tabs",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://*.lazada.sg/*",
+    "https://acs-m.lazada.sg/*",
+    "https://cart.lazada.sg/*",
+    "https://checkout.lazada.sg/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.lazada.sg/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
