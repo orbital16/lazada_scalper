@@ -93,11 +93,20 @@ def check_product_stock(product):
 
             return True
         else:
-            add_log(f"❌ Failed to check {product.get('name', product['item_id'])}", "error")
+            # More detailed error message
+            product_name = product.get('name', 'Loading...')
+            if product_name == 'Loading...':
+                product_name = f"Item {product['item_id']}"
+            add_log(f"❌ API returned no data for {product_name}", "error")
+            product['last_check'] = datetime.now().strftime('%H:%M:%S')
             return False
 
     except Exception as e:
-        add_log(f"❌ Error checking {product.get('name', product['item_id'])}: {str(e)}", "error")
+        product_name = product.get('name', 'Loading...')
+        if product_name == 'Loading...':
+            product_name = f"Item {product['item_id']}"
+        add_log(f"❌ Error: {product_name} - {str(e)[:50]}", "error")
+        product['last_check'] = datetime.now().strftime('%H:%M:%S')
         return False
 
 # Load products on startup
