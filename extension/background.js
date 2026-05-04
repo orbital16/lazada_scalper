@@ -1,6 +1,8 @@
 // Background monitoring script
 // Runs continuously to check stock
 
+console.log('🚀 Lazada Auto-Buy Bot - Background script loaded');
+
 let watchlist = [];
 let isMonitoring = false;
 let testMode = false;
@@ -12,8 +14,17 @@ chrome.storage.local.get(['watchlist', 'testMode', 'checkInterval'], (data) => {
   testMode = data.testMode || false;
   checkInterval = data.checkInterval || 3000;
 
+  console.log('📦 Loaded from storage:', {
+    watchlistCount: watchlist.length,
+    testMode,
+    checkInterval
+  });
+
   if (watchlist.length > 0) {
+    console.log('📋 Watchlist has products, starting monitoring...');
     startMonitoring();
+  } else {
+    console.log('📋 Watchlist is empty, waiting for products...');
   }
 });
 
@@ -51,6 +62,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 function addToWatchlist(product) {
+  console.log('➕ Adding product to watchlist:', product);
+
   const existing = watchlist.find(p => p.itemId === product.itemId);
   if (!existing) {
     product.addedAt = Date.now();
@@ -60,11 +73,16 @@ function addToWatchlist(product) {
     watchlist.push(product);
     chrome.storage.local.set({watchlist});
 
+    console.log('✅ Product added. Watchlist now has', watchlist.length, 'products');
+
     if (watchlist.length === 1) {
+      console.log('🔥 First product added, starting monitoring...');
       startMonitoring();
     }
 
     showNotification('Product Added', `Now monitoring: ${product.name}`);
+  } else {
+    console.log('⚠️  Product already in watchlist');
   }
 }
 
@@ -78,10 +96,15 @@ function removeFromWatchlist(itemId) {
 }
 
 function startMonitoring() {
-  if (isMonitoring) return;
+  if (isMonitoring) {
+    console.log('⚠️  Already monitoring');
+    return;
+  }
 
   isMonitoring = true;
-  console.log('🔥 Monitoring started');
+  console.log('🔥 Monitoring started!');
+  console.log('📋 Will check', watchlist.length, 'products every', checkInterval/1000, 'seconds');
+  console.log('🧪 Test mode:', testMode ? 'ENABLED (will not buy)' : 'DISABLED (WILL AUTO-BUY!)');
 
   // Start checking loop
   checkAllProducts();
@@ -93,21 +116,31 @@ function stopMonitoring() {
 }
 
 async function checkAllProducts() {
-  if (!isMonitoring || watchlist.length === 0) return;
+  if (!isMonitoring || watchlist.length === 0) {
+    console.log('⏸️  Not monitoring or no products');
+    return;
+  }
+
+  console.log('🔄 Checking', watchlist.length, 'products...');
 
   for (const product of watchlist) {
     if (product.status === 'monitoring') {
       await checkProduct(product);
+    } else {
+      console.log(`⏭️  Skipping ${product.name} (status: ${product.status})`);
     }
   }
 
   // Schedule next check
+  console.log(`⏰ Next check in ${checkInterval/1000} seconds`);
   setTimeout(checkAllProducts, checkInterval);
 }
 
 async function checkProduct(product) {
   try {
-    console.log(`Checking: ${product.name}`);
+    console.log(`\n🔍 Checking: ${product.name}`);
+    console.log(`   URL: ${product.url}`);
+    console.log(`   Item ID: ${product.itemId}`);
 
     const timestamp = Date.now();
     const url = `https://acs-m.lazada.sg/h5/mtop.global.detail.web.getdetailinfo/1.0/`;
