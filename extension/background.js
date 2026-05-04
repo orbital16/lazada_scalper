@@ -176,9 +176,17 @@ async function checkProduct(product) {
       credentials: 'include' // Use browser's cookies
     });
 
+    console.log(`   API Response status: ${response.status}`);
+
     const data = await response.json();
+    console.log(`   API Response keys:`, Object.keys(data));
+
+    if (data.ret && data.ret[0]) {
+      console.log(`   ⚠️  API Error: ${data.ret[0]}`);
+    }
 
     if (data.data && data.data.module) {
+      console.log(`   ✅ Got module data`);
       const module = JSON.parse(data.data.module);
       const skuInfo = module.skuInfos?.['0'] || Object.values(module.skuInfos || {})[0];
 
@@ -191,15 +199,17 @@ async function checkProduct(product) {
         product.lastPrice = skuInfo.dataLayer?.pdt_price || 'N/A';
         product.lastQuantity = maxQty;
 
-        console.log(`${product.name}: ${inStock ? '✅ IN STOCK' : '❌ OUT'} (${maxQty} units)`);
+        console.log(`   📊 ${product.name}: ${inStock ? '✅ IN STOCK' : '❌ OUT OF STOCK'} (${maxQty} units) - ${product.lastPrice}`);
 
         if (inStock && product.autoBuy) {
           // STOCK DETECTED!
+          console.log(`   🔥 STOCK DETECTED! Initiating purchase...`);
           product.status = 'purchasing';
           chrome.storage.local.set({watchlist});
 
           if (testMode) {
             // TEST MODE - Don't actually buy
+            console.log(`   🧪 TEST MODE - Would purchase now!`);
             showNotification(
               '🧪 TEST MODE: Would Buy Now!',
               `${product.name} - ${maxQty} units available at ${product.lastPrice}`,
@@ -208,10 +218,16 @@ async function checkProduct(product) {
             product.status = 'test_complete';
           } else {
             // REAL MODE - Auto purchase
+            console.log(`   🚀 LIVE MODE - Auto-purchasing!`);
             await autoPurchase(product, skuInfo);
           }
         }
+      } else {
+        console.log(`   ⚠️  No SKU info found in module`);
       }
+    } else {
+      console.log(`   ❌ No module data in response`);
+      console.log(`   Response preview:`, JSON.stringify(data).substring(0, 200));
     }
 
     chrome.storage.local.set({watchlist});
