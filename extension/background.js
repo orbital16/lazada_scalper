@@ -146,39 +146,57 @@ async function checkProduct(product) {
     console.log(`   Item ID: ${product.itemId}`);
 
     // Find a Lazada tab to inject into
-    const tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/*' });
+    let tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/*' });
 
     if (tabs.length === 0) {
       console.log(`   ⚠️  No Lazada tabs open - opening one...`);
       // Open a hidden Lazada tab
       const tab = await chrome.tabs.create({ url: 'https://www.lazada.sg/', active: false });
 
-      // Wait for tab to load
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Trigger check
-      await chrome.tabs.sendMessage(tab.id, {
-        action: 'checkStock',
-        itemId: product.itemId,
-        url: product.url
+      // Wait for tab to load and content script to inject
+      await new Promise(resolve => {
+        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+          if (tabId === tab.id && info.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        });
       });
 
-      return;
+      // Give it extra time for content script
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      tabs = [tab];
     }
 
     // Use existing tab
     const tab = tabs[0];
     console.log(`   Using tab: ${tab.id}`);
 
-    // Send check request to content script which will trigger injected script
-    await chrome.tabs.sendMessage(tab.id, {
-      action: 'checkStock',
-      itemId: product.itemId,
-      url: product.url
-    });
+    // Try to send message with retry
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, {
+          action: 'checkStock',
+          itemId: product.itemId,
+          url: product.url
+        });
+        console.log(`   ✅ Message sent to tab`);
+        break;
+      } catch (err) {
+        retries--;
+        if (retries > 0) {
+          console.log(`   ⚠️  Retry ${3 - retries}/3... waiting for content script`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          throw err;
+        }
+      }
+    }
 
   } catch (error) {
-    console.error(`Error checking ${product.name}:`, error);
+    console.error(`   ❌ Error: ${error.message}`);
     product.lastCheck = Date.now();
     product.error = error.message;
     chrome.storage.local.set({watchlist});
