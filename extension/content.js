@@ -1,12 +1,37 @@
 // Content script - Runs on Lazada pages
-// Injects "Monitor This" button
+// Injects code into page and handles communication
 
 console.log('🔥 Lazada Auto-Buy Bot loaded');
+
+// Inject the script into page context
+injectScript();
 
 // Add "Monitor This Product" button on product pages
 if (window.location.pathname.includes('/products/')) {
   addMonitorButton();
 }
+
+function injectScript() {
+  const script = document.createElement('script');
+  script.src = chrome.runtime.getURL('injected.js');
+  script.onload = function() {
+    this.remove();
+  };
+  (document.head || document.documentElement).appendChild(script);
+  console.log('✅ Injected monitoring script into page');
+}
+
+// Listen for stock check results from injected script
+window.addEventListener('LAZADA_STOCK_RESULT', (event) => {
+  const result = event.detail;
+  console.log('📊 Stock result:', result);
+
+  // Forward to background
+  chrome.runtime.sendMessage({
+    action: 'stockResult',
+    result: result
+  });
+});
 
 function addMonitorButton() {
   // Wait for page to load
@@ -73,11 +98,22 @@ function extractProductInfo() {
   };
 }
 
-// Listen for sound play request
-chrome.runtime.onMessage.addListener((message) => {
+// Listen for messages from background
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'playSound') {
     playAlertSound();
+  } else if (message.action === 'checkStock') {
+    // Trigger stock check in injected script
+    console.log(`Triggering check for item ${message.itemId}`);
+    window.dispatchEvent(new CustomEvent('LAZADA_CHECK_STOCK', {
+      detail: {
+        itemId: message.itemId,
+        url: message.url
+      }
+    }));
+    sendResponse({success: true});
   }
+  return true;
 });
 
 function playAlertSound() {

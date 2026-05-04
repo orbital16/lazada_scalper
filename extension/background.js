@@ -36,6 +36,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'removeProduct') {
     removeFromWatchlist(message.productId);
     sendResponse({success: true});
+  } else if (message.action === 'stockResult') {
+    handleStockResult(message.result);
+    sendResponse({success: true});
   } else if (message.action === 'startMonitoring') {
     startMonitoring();
     sendResponse({success: true});
@@ -142,101 +145,87 @@ async function checkProduct(product) {
     console.log(`   URL: ${product.url}`);
     console.log(`   Item ID: ${product.itemId}`);
 
-    const timestamp = Date.now();
-    const url = `https://acs-m.lazada.sg/h5/mtop.global.detail.web.getdetailinfo/1.0/`;
+    // Find a Lazada tab to inject into
+    const tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/*' });
 
-    const params = new URLSearchParams({
-      jsv: '2.6.1',
-      appKey: '24677475',
-      t: timestamp.toString(),
-      api: 'mtop.global.detail.web.getdetailinfo',
-      v: '1.0',
-      type: 'originaljson',
-      dataType: 'json',
-      timeout: '20000',
-      isSec: '0',
-      AntiCreep: 'true',
-      sessionOption: 'AutoLoginOnly',
-      'x-i18n-language': 'en',
-      'x-i18n-regionID': 'SG'
-    });
+    if (tabs.length === 0) {
+      console.log(`   ⚠️  No Lazada tabs open - opening one...`);
+      // Open a hidden Lazada tab
+      const tab = await chrome.tabs.create({ url: 'https://www.lazada.sg/', active: false });
 
-    const postData = {
-      deviceType: 'pc',
-      path: product.url,
-      uri: `pdp-i${product.itemId}`
-    };
+      // Wait for tab to load
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const response = await fetch(`${url}?${params.toString()}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `data=${encodeURIComponent(JSON.stringify(postData))}`,
-      credentials: 'include' // Use browser's cookies
-    });
+      // Trigger check
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'checkStock',
+        itemId: product.itemId,
+        url: product.url
+      });
 
-    console.log(`   API Response status: ${response.status}`);
-
-    const data = await response.json();
-    console.log(`   API Response keys:`, Object.keys(data));
-
-    if (data.ret && data.ret[0]) {
-      console.log(`   ⚠️  API Error: ${data.ret[0]}`);
+      return;
     }
 
-    if (data.data && data.data.module) {
-      console.log(`   ✅ Got module data`);
-      const module = JSON.parse(data.data.module);
-      const skuInfo = module.skuInfos?.['0'] || Object.values(module.skuInfos || {})[0];
+    // Use existing tab
+    const tab = tabs[0];
+    console.log(`   Using tab: ${tab.id}`);
 
-      if (skuInfo) {
-        const quantity = skuInfo.quantity || {};
-        const maxQty = quantity.limit?.max || 0;
-        const inStock = maxQty > 0;
-
-        product.lastCheck = Date.now();
-        product.lastPrice = skuInfo.dataLayer?.pdt_price || 'N/A';
-        product.lastQuantity = maxQty;
-
-        console.log(`   📊 ${product.name}: ${inStock ? '✅ IN STOCK' : '❌ OUT OF STOCK'} (${maxQty} units) - ${product.lastPrice}`);
-
-        if (inStock && product.autoBuy) {
-          // STOCK DETECTED!
-          console.log(`   🔥 STOCK DETECTED! Initiating purchase...`);
-          product.status = 'purchasing';
-          chrome.storage.local.set({watchlist});
-
-          if (testMode) {
-            // TEST MODE - Don't actually buy
-            console.log(`   🧪 TEST MODE - Would purchase now!`);
-            showNotification(
-              '🧪 TEST MODE: Would Buy Now!',
-              `${product.name} - ${maxQty} units available at ${product.lastPrice}`,
-              true
-            );
-            product.status = 'test_complete';
-          } else {
-            // REAL MODE - Auto purchase
-            console.log(`   🚀 LIVE MODE - Auto-purchasing!`);
-            await autoPurchase(product, skuInfo);
-          }
-        }
-      } else {
-        console.log(`   ⚠️  No SKU info found in module`);
-      }
-    } else {
-      console.log(`   ❌ No module data in response`);
-      console.log(`   Response preview:`, JSON.stringify(data).substring(0, 200));
-    }
-
-    chrome.storage.local.set({watchlist});
+    // Send check request to content script which will trigger injected script
+    await chrome.tabs.sendMessage(tab.id, {
+      action: 'checkStock',
+      itemId: product.itemId,
+      url: product.url
+    });
 
   } catch (error) {
     console.error(`Error checking ${product.name}:`, error);
     product.lastCheck = Date.now();
     product.error = error.message;
+    chrome.storage.local.set({watchlist});
   }
+}
+
+function handleStockResult(result) {
+  console.log(`📊 Stock result for item ${result.itemId}:`, result);
+
+  const product = watchlist.find(p => p.itemId === result.itemId);
+  if (!product) return;
+
+  product.lastCheck = Date.now();
+
+  if (result.success) {
+    product.lastPrice = result.price;
+    product.lastQuantity = result.quantity;
+    product.name = result.name || product.name;
+
+    console.log(`   ${result.inStock ? '✅ IN STOCK' : '❌ OUT'} (${result.quantity} units) - ${result.price}`);
+
+    if (result.inStock && product.autoBuy) {
+      // STOCK DETECTED!
+      console.log(`   🔥 STOCK DETECTED! Initiating purchase...`);
+      product.status = 'purchasing';
+
+      if (testMode) {
+        // TEST MODE
+        console.log(`   🧪 TEST MODE - Would purchase now!`);
+        showNotification(
+          '🧪 TEST MODE: Would Buy Now!',
+          `${product.name} - ${result.quantity} units at ${result.price}`,
+          true
+        );
+        product.status = 'test_complete';
+      } else {
+        // REAL MODE
+        console.log(`   🚀 LIVE MODE - Auto-purchasing!`);
+        autoPurchase(product, result);
+      }
+    }
+  } else {
+    console.log(`   ❌ Check failed: ${result.error}`);
+    product.error = result.error;
+  }
+
+  chrome.storage.local.set({watchlist});
 }
 
 async function autoPurchase(product, skuInfo) {
