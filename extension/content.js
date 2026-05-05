@@ -13,12 +13,12 @@ if (window.location.pathname.includes('/products/')) {
 
 function injectScript() {
   const script = document.createElement('script');
-  script.src = chrome.runtime.getURL('injected.js');
+  script.src = chrome.runtime.getURL('injected_signed.js');
   script.onload = function() {
     this.remove();
   };
   (document.head || document.documentElement).appendChild(script);
-  console.log('✅ Injected monitoring script into page');
+  console.log('✅ Injected signed monitoring script into page');
 }
 
 // Listen for stock check results from injected script

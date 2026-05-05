@@ -29,7 +29,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["injected.js", "injected_signed.js", "injected_dom.js"],
       "matches": ["https://www.lazada.sg/*"]
     }
   ],

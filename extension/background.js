@@ -145,48 +145,37 @@ async function checkProduct(product) {
     console.log(`   URL: ${product.url}`);
     console.log(`   Item ID: ${product.itemId}`);
 
-    // NEW APPROACH: Navigate to product page and check DOM
-    // This is the ONLY reliable way to avoid anti-bot
+    // Use signed API approach - inject into ANY Lazada tab
+    let tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/*' });
 
-    // Find or create a dedicated monitoring tab
-    let tabs = await chrome.tabs.query({ url: 'https://www.lazada.sg/products/*' });
-
-    let tab;
     if (tabs.length === 0) {
-      console.log(`   Creating monitoring tab...`);
-      tab = await chrome.tabs.create({ url: product.url, active: false });
-    } else {
-      // Reuse existing tab
-      tab = tabs[0];
-      console.log(`   Reusing tab ${tab.id}, navigating to product...`);
-      await chrome.tabs.update(tab.id, { url: product.url });
-    }
+      console.log(`   ⚠️  No Lazada tabs - opening homepage...`);
+      const tab = await chrome.tabs.create({ url: 'https://www.lazada.sg/', active: false });
 
-    // Wait for page to load
-    await new Promise(resolve => {
-      chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-        if (tabId === tab.id && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          console.log(`   ✅ Page loaded`);
-          resolve();
-        }
+      await new Promise(resolve => {
+        chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+          if (tabId === tab.id && info.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        });
       });
-    });
 
-    // Give DOM time to render
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Execute DOM check directly in the page
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: checkStockFromPageDOM
-    });
-
-    if (results && results[0] && results[0].result) {
-      handleStockResult(results[0].result);
-    } else {
-      throw new Error('No result from DOM check');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      tabs = [tab];
     }
+
+    const tab = tabs[0];
+    console.log(`   Using tab: ${tab.id}`);
+
+    // Trigger check via content script
+    await chrome.tabs.sendMessage(tab.id, {
+      action: 'checkStock',
+      itemId: product.itemId,
+      url: product.url
+    });
+
+    console.log(`   ✅ Check initiated`);
 
   } catch (error) {
     console.error(`   ❌ Error: ${error.message}`);
