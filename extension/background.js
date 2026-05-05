@@ -6,13 +6,13 @@ console.log('🚀 Lazada Auto-Buy Bot - Background script loaded');
 let watchlist = [];
 let isMonitoring = false;
 let testMode = false;
-let checkInterval = 3000; // 3 seconds - SAFE interval to avoid CAPTCHA
+let checkInterval = 5000; // 5 seconds - SAFE interval to avoid CAPTCHA
 
 // Load settings on startup
 chrome.storage.local.get(['watchlist', 'testMode', 'checkInterval'], (data) => {
   watchlist = data.watchlist || [];
   testMode = data.testMode || false;
-  checkInterval = data.checkInterval || 3000;
+  checkInterval = data.checkInterval || 5000;
 
   console.log('📦 Loaded from storage:', {
     watchlistCount: watchlist.length,

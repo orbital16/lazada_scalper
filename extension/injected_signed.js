@@ -31,7 +31,7 @@
 
       // Generate sign (MD5 hash)
       const signStr = `${token}&${timestamp}&${appKey}&${dataStr}`;
-      const sign = await md5(signStr);
+      const sign = md5(signStr);
 
       console.log(`[Signed] Generated signature`);
 
