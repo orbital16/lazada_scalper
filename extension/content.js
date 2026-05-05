@@ -102,6 +102,7 @@ function extractProductInfo() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'playSound') {
     playAlertSound();
+    sendResponse({success: true});
   } else if (message.action === 'checkStock') {
     // Trigger stock check in injected script
     console.log(`Triggering check for item ${message.itemId}`);
