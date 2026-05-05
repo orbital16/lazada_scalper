@@ -168,6 +168,21 @@ async function checkProduct(product) {
     const tab = tabs[0];
     console.log(`   Using tab: ${tab.id}`);
 
+    // Ensure content script is injected
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js']
+      });
+      console.log(`   ✅ Content script injected`);
+    } catch (e) {
+      // Script might already be injected, that's OK
+      console.log(`   ℹ️  Content script injection skipped (may already exist)`);
+    }
+
+    // Wait a bit for injection to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Trigger check via content script
     await chrome.tabs.sendMessage(tab.id, {
       action: 'checkStock',
